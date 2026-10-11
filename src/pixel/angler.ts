@@ -1,0 +1,48 @@
+import type { Bitmap } from "./bitmaps";
+
+export type AnglerSprite = { bitmap: Bitmap; hand: { x: number; y: number }; scale: number };
+
+const ANGLER_BITMAP: Bitmap = [
+  "............nnnnnn......",
+  "..........nnnnnnnnnn....",
+  ".........nnnnnnnnnnnn...",
+  ".........nnnnnnnnnnnn...",
+  ".........nnnnnnnnnnnn...",
+  ".........nnnnnnnnnnnn...",
+  ".........NNNNNNNNNNNN...",
+  ".........NNNNNNNNNNNN...",
+  ".........NNNNNNNNNNNN...",
+  "...........ssssssss.....",
+  "............ssssss......",
+  "............ssssss......",
+  ".........oooooooooooo...",
+  ".......oooooooooooooooo.",
+  ".....ooooooooooooooooooo",
+  ".....ooooooooooooooooooo",
+  ".....ooo.oooooooooooo.oo",
+  ".....ooo.oooooooooooo.oo",
+  ".....ooo.oooooooooooo.oo",
+  ".....ooo.oooooooooooo.oo",
+  ".....ooo.oooooooooooo.oo",
+  ".....ooo.oooooooooooo.oo",
+  ".....ooo.oooooooooooo.oo",
+  ".....ooo.oooooooooooo.oo",
+  "....sss..oooooooooooo.oo",
+  "...ssss..oooooooooooo.oo",
+  "...ssss..oooooooooooo.oo",
+  "...ssss..oooooooooooo.oo",
+  ".........JJJJJJJJJJJJJss",
+  ".........jjjjjjJjjjjjjss",
+  ".........jjjjjjJjjjjjj..",
+  ".........jjjjjjJjjjjjj..",
+  ".........jjjjjjJjjjjjj..",
+  ".........jjjjjjJjjjjjj..",
+  ".........jjjjjjJjjjjjj..",
+  ".........jjjjjjJjjjjjj..",
+  ".........jjjjjjJjjjjjj..",
+  ".........jjjjjjJjjjjjj..",
+  ".........jjjjjjJjjjjjj..",
+  ".........jjjjjjJjjjjjj..",
+];
+
+export const ANGLER: AnglerSprite = { bitmap: ANGLER_BITMAP, hand: { x: 4, y: 26 }, scale: 1 };

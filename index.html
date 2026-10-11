@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a1119" />
+    <meta name="description" content="A first-person fishing game. Cast from the end of the pier and wait for the big one." />
+    <title>The Big One</title>
+    <link rel="icon" href="data:," />
+    <script>
+      (function () {
+        var theme = null;
+        try {
+          var param = new URLSearchParams(window.location.search).get("theme");
+          if (param === "light" || param === "dark") theme = param;
+        } catch (error) {
+          theme = null;
+        }
+        if (!theme) {
+          try {
+            var stored = window.localStorage.getItem("scene-theme");
+            if (stored === "light" || stored === "dark") theme = stored;
+          } catch (error) {
+            theme = null;
+          }
+        }
+        if (!theme) {
+          var hour = new Date().getHours();
+          theme = hour < 6 || hour >= 18 ? "dark" : "light";
+        }
+        document.documentElement.setAttribute("data-theme", theme);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", theme === "dark" ? "#0a1119" : "#d6e2e4");
+      })();
+    </script>
+    <link rel="preload" href="/fonts/silkscreen-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      @font-face {
+        font-family: "Silkscreen";
+        src: url("/fonts/silkscreen-latin.woff2") format("woff2");
+        font-weight: 400;
+        font-style: normal;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Archivo";
+        src: url("/fonts/archivo-latin.woff2") format("woff2");
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: swap;
+      }
+    </style>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <canvas data-ui="stage" aria-hidden="true"></canvas>
+    <div id="ui"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
