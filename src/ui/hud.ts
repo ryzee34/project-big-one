@@ -50,7 +50,7 @@ export function mountUi(root: HTMLElement, deps: Deps): Ui {
   const creelCount = el("span", { class: "pill-count", "data-ui": "creel-count", text: "0" });
   const creel = el("button", { type: "button", class: "pill hud-pill", "data-ui": "creel", "aria-label": "Open the log" }, [
     pixelIcon(CREEL, "icon icon-creel"),
-    el("span", { class: "pill-label", text: "Creel" }),
+    el("span", { class: "pill-label", text: "Catches" }),
     creelCount,
   ]);
   const sun = pixelIcon(SUN_ICON, "icon icon-sun");

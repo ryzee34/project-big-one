@@ -17,7 +17,7 @@ export const KEYS_ROW: HowToRow = {
 export function howToRows(mode: InputMode): HowToRow[] {
   return [
     { id: "cast", icon: HOLD_ICON, term: "Cast", body: "Hold to charge, let go to cast." },
-    { id: "wait", icon: FLOAT_ICON, term: "Wait", body: "A dip is a nibble, under is a bite." },
+    { id: "wait", icon: FLOAT_ICON, term: "Wait", body: "Watch the bobber and wait for a fish to pull it underwater." },
     { id: "hook", icon: TAP_ICON, term: "Hook", body: "Tap the moment it goes under." },
     mode === "coarse"
       ? { id: "reel", icon: SPIN_ICON, term: "Reel", body: "Spin to reel in." }

@@ -43,8 +43,9 @@ risky: it raises tension by itself, and a fish that runs on top of that will sna
 rest when the meter goes dark. With no tension at all for a few seconds the fish throws the
 hook, except while you are taking line in. A fish that is tiring shows itself at the surface.
 
-The first visit opens a How to fish card over the title: hold to cast, a dip is a nibble and
-under is a bite, tap when it goes under, and how to reel on your kind of pointer. GOT IT,
+The first visit opens a How to fish card under the title: hold to cast, watch the bobber and
+wait for a fish to pull it under, tap when it goes under, and how to reel on your kind of
+pointer. GOT IT,
 Escape or a press on the stage closes it (that press does not cast), and it never comes back
 once closed; the Help view in the menu shows the same rows plus the keys. During a fight a small
 pill beside the reel says SCROLL (mouse) or SPIN (touch) until you crank for the first time, or

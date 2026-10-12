@@ -377,7 +377,8 @@ the HUD button), stored in settings. Nothing is loaded; every effect is synthesi
 DOM over the canvas, in the site's pill recipe (Silkscreen 9 px, 16 px line height,
 uppercase, 3 px edge, 3 px hard shadow).
 
-- Top left: the creel pill with the `CREEL` icon and the kept count. Opens the log.
+- Top left: the catches pill, labelled CATCHES with the `CREEL` icon and the kept count. Opens
+  the log.
 - Top right: theme, mute and menu pills with baked pixel icons. On narrow stages the pills shrink
   to icons only.
 - Bottom centre: the state hint. HOLD TO CAST, WAIT FOR IT, HIT IT, SCROLL TO REEL or SPIN TO
@@ -389,8 +390,8 @@ uppercase, 3 px edge, 3 px hard shadow).
   The turn is a CSS animation on wall time. Static under reduced motion.
 - Intro card, first visit only: HOW TO FISH centred below the title block, four rows with pixel
   icons.
-  Hold to charge, let go to cast. Wait: a dip is a nibble, under is a bite. Tap the moment it
-  goes under. Spin to reel in (coarse) or Scroll the wheel to reel in, hold to reel steady
+  Hold to charge, let go to cast. Watch the bobber and wait for a fish to pull it underwater.
+  Tap the moment it goes under. Spin to reel in (coarse) or Scroll the wheel to reel in, hold to reel steady
   (fine). A GOT IT pill closes it, as do Escape, Space, Enter or a press on the stage, and that
   press or key does not cast; ? and L close it and open help or the log. Closing stores
   `the-big-one:intro` in localStorage so it never returns; the menu's Help shows the same rows
