@@ -1,5 +1,6 @@
-import type { GameEvent, Snapshot, Theme } from "../game/types";
+import type { GameEvent, InputMode, Snapshot, Theme } from "../game/types";
 import { el, releaseFocus, setClass, setHidden, setText, stopAll, trapFocus } from "./dom";
+import { KEYS_ROW, detectInputMode, howToRows, renderHowTo } from "./howto";
 
 export type MenuPanel = {
   el: HTMLElement;
@@ -13,14 +14,6 @@ type Deps = {
   openLog: () => void;
   setTheme: (theme: Theme) => void;
 };
-
-const HELP_ROWS: Array<[string, string]> = [
-  ["Cast", "Hold to charge, release to cast. Let go near the top for a perfect cast."],
-  ["Aim", "Move the pointer, or press Left and Right."],
-  ["Wait", "A dip is a nibble. When the bobber goes under, press to hook."],
-  ["Fight", "Hold to reel, release to rest. Keep the meter out of the red."],
-  ["Keys", "Space casts and reels. R retrieves. T day and night. M mute. L log. Esc menu."],
-];
 
 export function createMenu(deps: Deps): MenuPanel {
   const resume = el("button", { type: "button", class: "pill menu-item", "data-action": "resume", text: "Resume" });
@@ -36,10 +29,14 @@ export function createMenu(deps: Deps): MenuPanel {
   ]);
 
   const back = el("button", { type: "button", class: "pill", "data-action": "help-back", text: "Back" });
-  const helpList = el("dl", { class: "help-list" });
-  for (const [term, body] of HELP_ROWS) {
-    helpList.append(el("dt", { class: "pixel-label help-term", text: term }), el("dd", { class: "help-body", text: body }));
-  }
+  const helpList = el("ul", { class: "howto-list help-rows", "data-ui": "help-rows" });
+  let helpMode: InputMode | null = null;
+  const renderHelp = (mode: InputMode) => {
+    if (mode === helpMode) return;
+    helpMode = mode;
+    renderHowTo(helpList, [...howToRows(mode), KEYS_ROW]);
+  };
+  renderHelp(detectInputMode());
   const helpView = el("div", { class: "help-view", "data-ui": "help" }, [
     el("h2", { class: "panel-title", text: "How to fish" }),
     el("p", { class: "card-prose", text: "There's a big one out past the point. It only bites far out, at night more than by day, and only once you've kept a few." }),
@@ -103,6 +100,7 @@ export function createMenu(deps: Deps): MenuPanel {
   const update = (snap: Snapshot) => {
     const wasOpen = !root.hidden;
     current = snap;
+    renderHelp(snap.inputMode);
     setText(theme, snap.theme === "dark" ? "Theme: Night" : "Theme: Day");
     setText(sound, snap.muted ? "Sound: Off" : "Sound: On");
     if (snap.menuOpen !== wasOpen) {

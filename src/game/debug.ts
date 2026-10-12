@@ -12,6 +12,7 @@ export function createDebugApi(machine: Machine, step: (ms: number) => void): De
     press: () => machine.dispatch({ type: "press" }),
     release: () => machine.dispatch({ type: "release" }),
     aim: (ax) => machine.dispatch({ type: "aim", ax }),
+    crank: (revs) => machine.dispatch({ type: "crank", revs }),
     tick: (ms) => step(ms),
     goto: (state, scenario) => machine.goto(state, scenario),
   };

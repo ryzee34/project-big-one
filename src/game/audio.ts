@@ -1,10 +1,12 @@
+import { clamp, lerp } from "../math";
 import { createRng } from "./rng";
-import { REEL_TENSION_DRAG, TENSION_ZONE_HOT } from "./tuning";
+import { HOLD_REEL_SPEED, REEL_TENSION_DRAG, REEL_TICK_MS_FAST, REEL_TICK_MS_SLOW, TENSION_ZONE_HOT } from "./tuning";
 import type { Cue, Snapshot } from "./types";
 
 const FLOOR = 0.0001;
 const ATTACK_S = 0.006;
-const REEL_TICK_S = 0.09;
+const TICK_PITCH_BASE = 1400;
+const TICK_PITCH_SPAN = 2600;
 const NOISE_SECONDS = 1;
 const NOISE_SEED = 0x5eed;
 const C5 = 523.25;
@@ -30,6 +32,15 @@ function buildNoise(ctx: AudioContext): AudioBuffer {
     data[i] = rng.next() * 2 - 1;
   }
   return buffer;
+}
+
+function reelSpeedOf(snap: Snapshot): number {
+  return clamp(snap.reelSpeed, 0, 1);
+}
+
+function tickIntervalS(speed: number): number {
+  const crank = clamp((speed - HOLD_REEL_SPEED) / (1 - HOLD_REEL_SPEED), 0, 1);
+  return lerp(REEL_TICK_MS_SLOW, REEL_TICK_MS_FAST, crank) / 1000;
 }
 
 function envelope(ctx: AudioContext, peak: number, at: number, duration: number, attack = ATTACK_S): GainNode {
@@ -93,7 +104,7 @@ export function createAudio(): Audio {
   const reelTick = (speed: number) => {
     if (!ctx) return;
     const at = ctx.currentTime;
-    const centre = 1400 + 2600 * Math.min(1, Math.max(0, speed));
+    const centre = TICK_PITCH_BASE + TICK_PITCH_SPAN * clamp(speed, 0, 1);
     hiss("bandpass", centre, centre, 3, 0.024, 0.6, at, lastTime);
   };
 
@@ -209,12 +220,17 @@ export function createAudio(): Audio {
       if (creak) stopCreak();
       return;
     }
-    const reeling = snap.reeling || snap.state === "retrieve";
+    const reelingIn = snap.state === "retrieve" || (snap.state === "lost" && snap.reeling);
+    const speed = reelingIn ? 1 : reelSpeedOf(snap);
+    const reeling = reelingIn || (snap.reeling && speed > 0);
     if (reeling) {
-      if (lastTick === null || snap.time < lastTick || snap.time - lastTick >= REEL_TICK_S) {
+      const interval = tickIntervalS(speed);
+      const last = lastTick;
+      const fresh = last === null || snap.time < last || snap.time - last >= 2 * interval;
+      if (fresh || snap.time - last >= interval) {
         const drag = snap.tension === null ? 0 : REEL_TENSION_DRAG * snap.tension;
-        reelTick(1 - drag);
-        lastTick = snap.time;
+        reelTick(speed * (1 - drag));
+        lastTick = fresh ? snap.time : last + interval;
       }
     } else {
       lastTick = null;

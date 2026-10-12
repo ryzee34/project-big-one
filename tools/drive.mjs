@@ -141,6 +141,12 @@ const BASE_URL = process.env.BASE_URL ?? `http://127.0.0.1:${PREVIEW_PORT}`;
 const SEED = 7;
 const SPEED = 8;
 const SAVE_KEY = "the-big-one:v1";
+const INTRO_KEY = "the-big-one:intro";
+const REEL_SPEED = 1;
+const WHEEL_EVENTS = { count: 12, deltaY: 100, totalMs: 600 };
+const CIRCLE = { radius: 60, points: 24, loops: 2, totalMs: 800 };
+const REEL_ATTEMPTS = 3;
+const HOLD_MS = 30000;
 const THEMES = ["dark", "light"];
 const DESKTOP = { name: "desktop", width: 1440, height: 900 };
 const PHONE = { name: "phone", width: 390, height: 844 };
@@ -206,6 +212,17 @@ const HELPERS = `
     const inside = r.width > 0 && r.height > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
     return { left: Math.round(r.left), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom), inside };
   };
+  const shown = (selector) => {
+    const el = document.querySelector(selector);
+    return Boolean(el) && el.closest("[hidden]") === null;
+  };
+  const centreOf = (selector) => {
+    const el = document.querySelector(selector);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+  };
+  const introFlag = () => localStorage.getItem(${JSON.stringify(INTRO_KEY)});
   const snap = () => game.state();
   const stepUntil = (predicate, maxMs, stepMs) => {
     let elapsed = 0;
@@ -224,6 +241,16 @@ const probe = (body) => `(async () => {
   ${HELPERS}
   ${body}
 })()`;
+
+function readTuning() {
+  const source = readFileSync(`${ROOT}src/game/tuning.ts`, "utf8");
+  const read = (name) => {
+    const match = source.match(new RegExp(`export const ${name} = ([0-9.]+);`));
+    if (!match) throw new Error(`could not find ${name} in src/game/tuning.ts`);
+    return Number(match[1]);
+  };
+  return { holdReelSpeed: read("HOLD_REEL_SPEED"), reelIdleSpeed: read("REEL_IDLE_SPEED"), reelHintMaxS: read("REEL_HINT_MAX_S") };
+}
 
 function readPalettes() {
   const source = readFileSync(`${ROOT}src/pixel/palettes.ts`, "utf8");
@@ -283,8 +310,8 @@ function drainErrors(chrome) {
   return errors;
 }
 
-async function openGame(chrome, run, extra = "") {
-  const url = `${BASE_URL}/?debug=1&seed=${SEED}&speed=${SPEED}&theme=${run.theme}${extra}`;
+async function openGame(chrome, run, { speed = SPEED } = {}) {
+  const url = `${BASE_URL}/?debug=1&seed=${SEED}&speed=${speed}&theme=${run.theme}`;
   await chrome.send("Page.navigate", { url });
   const started = Date.now();
   let ready = null;
@@ -308,6 +335,52 @@ async function openGame(chrome, run, extra = "") {
     throw error;
   }
   await chrome.evaluate(probe("await frame(); return true;"));
+}
+
+const isPhone = (run) => run.viewport[0] < 720;
+
+async function pressAt(chrome, run, point, holdMs = 0) {
+  if (isPhone(run)) {
+    await chrome.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: point.x, y: point.y }] });
+    if (holdMs) await sleep(holdMs);
+    await chrome.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    return;
+  }
+  await chrome.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
+  await chrome.send("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  if (holdMs) await sleep(holdMs);
+  await chrome.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
+}
+
+async function wheelBurst(chrome, point) {
+  const gap = WHEEL_EVENTS.totalMs / WHEEL_EVENTS.count;
+  const started = Date.now();
+  for (let i = 0; i < WHEEL_EVENTS.count; i++) {
+    await chrome.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: point.x, y: point.y, deltaX: 0, deltaY: WHEEL_EVENTS.deltaY });
+    const wait = started + (i + 1) * gap - Date.now();
+    if (wait > 0) await sleep(wait);
+  }
+  return Date.now() - started;
+}
+
+async function circleDrag(chrome, centre) {
+  const at = (k) => {
+    const angle = (k / CIRCLE.points) * CIRCLE.loops * Math.PI * 2;
+    return { x: Math.round(centre.x + CIRCLE.radius * Math.cos(angle)), y: Math.round(centre.y + CIRCLE.radius * Math.sin(angle)) };
+  };
+  const gap = CIRCLE.totalMs / CIRCLE.points;
+  const start = at(0);
+  await chrome.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: start.x, y: start.y }] });
+  const started = Date.now();
+  for (let k = 1; k <= CIRCLE.points; k++) {
+    const point = at(k);
+    await chrome.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: point.x, y: point.y }] });
+    const wait = started + k * gap - Date.now();
+    if (wait > 0) await sleep(wait);
+  }
+  const elapsed = Date.now() - started;
+  await chrome.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  return elapsed;
 }
 
 async function runStep(run, chrome, id, label, fn) {
@@ -597,7 +670,239 @@ const stepReduced = () => async ({ check, shot }, chrome, run) => {
   await chrome.send("Emulation.setEmulatedMedia", { features: [] });
 };
 
-async function runSuite(size, theme, palette, steps) {
+const stepIntro = () => async ({ check, shot }, chrome, run) => {
+  const first = await chrome.evaluate(
+    probe(`
+      await frame();
+      const rows = Array.from(document.querySelectorAll('[data-ui="intro-rows"] li')).map((li) => li.textContent.replace(/\\s+/g, " ").trim());
+      return {
+        state: snap().state,
+        inDom: Boolean(document.querySelector('[data-ui="intro"]')),
+        shown: shown('[data-ui="intro"]'),
+        rect: rectOf('[data-ui="intro"]'),
+        title: text('[data-ui="intro"] h2'),
+        rows,
+        button: text('[data-ui="intro"] [data-action="intro-done"]'),
+        buttonCentre: centreOf('[data-ui="intro"] [data-action="intro-done"]'),
+        flag: introFlag(),
+        hintRect: rectOf('[data-ui="hint"]'),
+      };
+    `),
+  );
+  check(first.inDom, "intro card [data-ui=intro] is in the DOM");
+  check(first.shown && first.rect && first.rect.inside, `intro card is shown on first load, inside the viewport (${JSON.stringify(first.rect)})`);
+  check(first.title && /how to fish/i.test(first.title), `intro title reads How to fish (got ${JSON.stringify(first.title)})`);
+  check(first.rows.length === 4, `intro has four rows (${first.rows.length}: ${first.rows.join(" | ")})`);
+  check(first.button === "GOT IT", `intro button reads GOT IT (got ${JSON.stringify(first.button)})`);
+  check(first.flag === null, `${INTRO_KEY} is unset before GOT IT (got ${JSON.stringify(first.flag)})`);
+  check(first.state === "idle", `game is idle under the intro (got ${first.state})`);
+  await shot("-intro");
+  if (first.buttonCentre) await pressAt(chrome, run, first.buttonCentre);
+  const closed = await chrome.evaluate(
+    probe(`
+      await frame();
+      return { shown: shown('[data-ui="intro"]'), rect: rectOf('[data-ui="intro"]'), flag: introFlag(), state: snap().state, power: snap().power };
+    `),
+  );
+  check(first.buttonCentre && !closed.shown, `GOT IT hides the intro (rect ${JSON.stringify(closed.rect)})`);
+  check(closed.flag === "1", `GOT IT sets ${INTRO_KEY} to "1" (got ${JSON.stringify(closed.flag)})`);
+  check(closed.state === "idle" && closed.power === null, `GOT IT does not reach the game (state ${closed.state}, power ${closed.power})`);
+  await openGame(chrome, run);
+  const again = await chrome.evaluate(
+    probe(`
+      await frame();
+      return { shown: shown('[data-ui="intro"]'), flag: introFlag(), showTitle: snap().showTitle };
+    `),
+  );
+  check(!again.shown, "a reload does not show the intro again");
+  check(again.flag === "1", `the flag survives the reload (got ${JSON.stringify(again.flag)})`);
+  check(again.showTitle === true, `the title still shows on the reload (showTitle=${again.showTitle})`);
+  await chrome.evaluate(`localStorage.removeItem(${JSON.stringify(INTRO_KEY)}); true`);
+  await openGame(chrome, run);
+  const back = await chrome.evaluate(probe("await frame(); return { shown: shown('[data-ui=\"intro\"]'), rect: rectOf('[data-ui=\"intro\"]'), state: snap().state };"));
+  check(back.shown && back.state === "idle", `with the flag cleared the intro returns (shown ${back.shown}, state ${back.state})`);
+  const stage = { x: Math.round(run.viewport[0] * 0.2), y: Math.min((back.rect ? back.rect.bottom : 0) + 40, run.viewport[1] - 120) };
+  const onCard = back.rect && stage.x >= back.rect.left && stage.x <= back.rect.right && stage.y >= back.rect.top && stage.y <= back.rect.bottom;
+  check(!onCard, `the stage press point (${stage.x},${stage.y}) is off the card (${JSON.stringify(back.rect)})`);
+  await pressAt(chrome, run, stage, 120);
+  const pressed = await chrome.evaluate(
+    probe(`
+      await frame();
+      await pause(150);
+      const s = snap();
+      return { shown: shown('[data-ui="intro"]'), flag: introFlag(), state: s.state, power: s.power, bobber: s.bobber.mode };
+    `),
+  );
+  check(!pressed.shown, `a press on the stage at (${stage.x},${stage.y}) closes the intro`);
+  check(pressed.flag === "1", `the stage press stores the flag (got ${JSON.stringify(pressed.flag)})`);
+  check(pressed.state === "idle" && pressed.power === null && pressed.bobber === "hung", `that press does not charge or cast (state ${pressed.state}, power ${pressed.power}, bobber ${pressed.bobber})`);
+  await shot();
+};
+
+const stepReel = (tuning) => async ({ check, shot }, chrome, run) => {
+  const phone = isPhone(run);
+  await openGame(chrome, run, { speed: REEL_SPEED });
+  const entered = await chrome.evaluate(
+    probe(`
+      game.goto("fight", "fight");
+      const s = snap();
+      await frame();
+      return {
+        state: s.state,
+        species: s.species,
+        showReelHint: s.showReelHint,
+        crank: s.crank,
+        reelSpeed: s.reelSpeed,
+        holding: s.holding,
+        lineOut: s.lineOut,
+        inputMode: s.inputMode,
+        introShown: shown('[data-ui="intro"]'),
+        hint: text('[data-ui="hint"]'),
+        label: text('[data-ui="reel-hint-label"]'),
+        shown: shown('[data-ui="reel-hint"]'),
+        rect: rectOf('[data-ui="reel-hint"]'),
+        hintRect: rectOf('[data-ui="hint"]'),
+        anglerLeft: (grip.x - 4) * px,
+        deckTop: (gridH - deck) * px,
+        reel: { x: (grip.x - 4) * px, y: (grip.y + 2) * px },
+      };
+    `),
+  );
+  const mode = phone ? "coarse" : "fine";
+  check(!entered.introShown, "the intro stays closed on the reel step");
+  check(entered.state === "fight" && entered.species === "bass", `goto fight hooks a bass (state ${entered.state}, species ${entered.species})`);
+  check(entered.showReelHint === true, `showReelHint is true at the start of the fight (got ${entered.showReelHint})`);
+  check(entered.shown && entered.rect && entered.rect.inside, `reel indicator is visible inside the viewport (${JSON.stringify(entered.rect)})`);
+  check(
+    entered.rect && entered.rect.right <= entered.anglerLeft && entered.rect.bottom <= entered.deckTop,
+    `reel indicator sits left of the angler (x ${entered.anglerLeft}) and above the deck (y ${entered.deckTop}); reel at (${entered.reel.x},${entered.reel.y})`,
+  );
+  const overlap =
+    entered.rect && entered.hintRect && entered.rect.left < entered.hintRect.right && entered.rect.right > entered.hintRect.left && entered.rect.top < entered.hintRect.bottom && entered.rect.bottom > entered.hintRect.top;
+  check(entered.hintRect && !overlap, `reel indicator does not overlap the hint pill (${JSON.stringify(entered.hintRect)})`);
+  check(entered.inputMode === mode, `input mode is ${mode} on the ${phone ? "phone" : "desktop"} run (got ${entered.inputMode})`);
+  check(entered.hint === (phone ? "SPIN TO REEL" : "SCROLL TO REEL"), `fight hint reads ${phone ? "SPIN TO REEL" : "SCROLL TO REEL"} (got ${JSON.stringify(entered.hint)})`);
+  check(entered.label === (phone ? "SPIN" : "SCROLL"), `indicator label reads ${phone ? "SPIN" : "SCROLL"} (got ${JSON.stringify(entered.label)})`);
+  check(entered.crank === 0 && entered.holding === false && entered.reelSpeed === 0, `the fight starts with no crank and no hold (crank ${entered.crank}, holding ${entered.holding}, reelSpeed ${entered.reelSpeed})`);
+  await shot("-hint");
+
+  const point = phone ? { x: Math.round(run.viewport[0] * 0.3), y: Math.round(run.viewport[1] * 0.53) } : { x: Math.round(run.viewport[0] * 0.3), y: Math.round(run.viewport[1] * 0.5) };
+  let result = null;
+  for (let attempt = 1; attempt <= REEL_ATTEMPTS; attempt++) {
+    await chrome.evaluate(
+      probe(`
+        game.goto("fight", "fight");
+        const rec = { on: true, frames: 0, maxCrank: 0, maxReel: 0, ran: false, held: false, hintHiddenAt: null, lineOut0: snap().lineOut, wheels: 0, prevented: 0 };
+        window.__reel = rec;
+        const loop = () => {
+          if (!rec.on) return;
+          const s = snap();
+          rec.frames += 1;
+          rec.maxCrank = Math.max(rec.maxCrank, s.crank);
+          rec.maxReel = Math.max(rec.maxReel, s.reelSpeed);
+          if (s.running) rec.ran = true;
+          if (s.holding) rec.held = true;
+          if (!s.showReelHint && rec.hintHiddenAt === null) rec.hintHiddenAt = rec.frames;
+          requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+        if (!window.__wheelWatch) {
+          window.__wheelWatch = true;
+          window.addEventListener("wheel", (event) => {
+            if (!window.__reel) return;
+            window.__reel.wheels += 1;
+            if (event.defaultPrevented) window.__reel.prevented += 1;
+          });
+        }
+        return true;
+      `),
+    );
+    const elapsed = phone ? await circleDrag(chrome, point) : await wheelBurst(chrome, point);
+    result = await chrome.evaluate(
+      probe(`
+        const s = snap();
+        const rec = window.__reel;
+        rec.on = false;
+        return {
+          state: s.state,
+          crank: s.crank,
+          reelSpeed: s.reelSpeed,
+          holding: s.holding,
+          lineOut: s.lineOut,
+          showReelHint: s.showReelHint,
+          hintShown: shown('[data-ui="reel-hint"]'),
+          scrollTop: document.scrollingElement.scrollTop,
+          rec: { frames: rec.frames, maxCrank: rec.maxCrank, maxReel: rec.maxReel, ran: rec.ran, held: rec.held, hintHiddenAt: rec.hintHiddenAt, lineOut0: rec.lineOut0, wheels: rec.wheels, prevented: rec.prevented },
+        };
+      `),
+    );
+    result.attempt = attempt;
+    result.elapsed = elapsed;
+    if (!result.rec.ran) break;
+  }
+  const r = result;
+  const input = phone ? `${CIRCLE.points} touch moves on a ${CIRCLE.radius} px circle, ${CIRCLE.loops} loops in ${r.elapsed} ms` : `${WHEEL_EVENTS.count} wheel events of ${WHEEL_EVENTS.deltaY} px in ${r.elapsed} ms`;
+  const tries = r.attempt > 1 ? `, attempt ${r.attempt} after the fish ran` : "";
+  check(r.state === "fight", `still fighting after ${input}${tries} (state ${r.state})`);
+  check(r.rec.maxCrank > 0 && r.crank > 0, `crank rises above zero (peak ${r.rec.maxCrank.toFixed(2)} rev/s, ${r.crank.toFixed(2)} right after the input)`);
+  check(r.rec.maxReel > tuning.holdReelSpeed, `reelSpeed rises above the steady hold ${tuning.holdReelSpeed} (peak ${r.rec.maxReel.toFixed(2)}, ${r.reelSpeed.toFixed(2)} after the input)`);
+  check(r.showReelHint === false && !r.hintShown, `the reel indicator hides after the first crank (showReelHint ${r.showReelHint}, hidden at frame ${r.rec.hintHiddenAt} of ${r.rec.frames})`);
+  check(typeof r.lineOut === "number" && r.lineOut < r.rec.lineOut0, `lineOut is reduced (${r.rec.lineOut0.toFixed(3)} -> ${typeof r.lineOut === "number" ? r.lineOut.toFixed(3) : r.lineOut}${r.rec.ran ? ", the fish ran during the input" : ""})`);
+  check(r.scrollTop === 0, `the page did not scroll (scrollTop ${r.scrollTop})`);
+  if (phone) {
+    check(r.rec.held && r.holding === false, `the finger held the steady reel during the circle and released after (held ${r.rec.held}, holding now ${r.holding})`);
+  } else {
+    check(r.rec.wheels === WHEEL_EVENTS.count && r.rec.prevented === WHEEL_EVENTS.count, `every wheel event reached the page and was consumed (${r.rec.prevented} of ${r.rec.wheels} prevented)`);
+    check(r.rec.held === false, `no press during the wheel burst (held ${r.rec.held})`);
+  }
+  await shot();
+};
+
+const stepHold = (tuning) => async ({ check, shot }, chrome) => {
+  const r = await chrome.evaluate(
+    probe(`
+      game.goto("fight", "fight");
+      const entered = snap();
+      game.press();
+      let samples = 0;
+      let maxCrank = 0;
+      let minReel = 1;
+      let maxReel = 0;
+      const done = stepUntil((s) => {
+        samples += 1;
+        maxCrank = Math.max(maxCrank, s.crank);
+        if (samples > 1 && s.state === "fight") {
+          minReel = Math.min(minReel, s.reelSpeed);
+          maxReel = Math.max(maxReel, s.reelSpeed);
+        }
+        return s.state === "landed" || s.state === "lost";
+      }, ${HOLD_MS}, 50);
+      game.release();
+      await frame();
+      return {
+        entered: entered.state,
+        species: entered.species,
+        showReelHint: entered.showReelHint,
+        state: done.snap.state,
+        elapsed: done.elapsed,
+        toast: done.snap.toast,
+        maxCrank,
+        minReel,
+        maxReel,
+        landing: done.snap.landing,
+      };
+    `),
+  );
+  check(r.entered === "fight" && r.species === "bass", `goto fight hooks the half-tired bass (state ${r.entered}, species ${r.species})`);
+  check(r.state === "landed", `a ${HOLD_MS / 1000} s hold with no crank lands the bass (got ${r.state} after ${r.elapsed} ms, toast ${JSON.stringify(r.toast)})`);
+  check(r.maxCrank === 0, `no crank during the hold (peak ${r.maxCrank})`);
+  const hold = tuning.holdReelSpeed;
+  check(Math.abs(r.minReel - hold) < 1e-9 && Math.abs(r.maxReel - hold) < 1e-9, `reelSpeed stays at the steady hold ${hold} throughout (${r.minReel} to ${r.maxReel})`);
+  check(r.landing && r.landing.species === "bass", `the landing animation starts for the bass (${JSON.stringify(r.landing)})`);
+  await shot();
+};
+
+async function runSuite(size, theme, palette, tuning, steps) {
   const run = {
     name: `${size.name}-${theme}`,
     theme,
@@ -619,6 +924,8 @@ async function runSuite(size, theme, palette, steps) {
       deviceScaleFactor: 1,
       mobile: size.width < 720,
     });
+    if (size.width < 720) await chrome.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+    run.tuning = tuning;
     const opened = await runStep(run, chrome, 0, "open /?debug=1 and wait for window.game", async () => {
       await openGame(chrome, run);
     });
@@ -666,6 +973,7 @@ try {
     throw new Error("dist/index.html is missing: run vite build before node tools/drive.mjs");
   }
   const palettes = readPalettes();
+  const tuning = readTuning();
   if (!process.env.BASE_URL) {
     active.preview = startPreview(PREVIEW_PORT);
     await active.preview.ready;
@@ -680,7 +988,9 @@ try {
     for (const theme of THEMES) {
       if (fatal) break;
       const palette = palettes[theme];
+      const phone = size.width < 720;
       const steps = [
+        [9, "first load: intro card; GOT IT hides it and sets the flag; a reload keeps it hidden; a stage press closes it without casting", stepIntro()],
         [1, "idle: sky stops, w4 water, skin on the hands", stepIdle(palette)],
         [2, "press, 400 ms, release: cast then wait, bobber accent on the water", stepCast(palette)],
         [3, "goto bite, press: fight", stepBite(palette)],
@@ -688,7 +998,15 @@ try {
         [5, "goto fightSnap: lost with the snap message", stepSnap()],
       ];
       if (full) steps.push([6, "reduced motion: two idle frames identical", stepReduced()]);
-      const run = await runSuite(size, theme, palette, steps);
+      steps.push([
+        10,
+        phone
+          ? "goto fight at speed 1: reel indicator shows SPIN; a two-loop touch circle cranks, hides it and takes line"
+          : "goto fight at speed 1: reel indicator shows SCROLL; twelve wheel events crank, hide it and take line",
+        stepReel(tuning),
+      ]);
+      steps.push([11, "goto fight: a 30 s steady hold with no crank lands the bass", stepHold(tuning)]);
+      const run = await runSuite(size, theme, palette, tuning, steps);
       summary.runs.push(run);
       if (run.steps.some((s) => s.fatal)) fatal = true;
     }

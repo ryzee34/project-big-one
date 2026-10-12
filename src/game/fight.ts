@@ -5,6 +5,7 @@ import {
   FIGHT_PULL_FLOOR,
   FIGHT_PULL_SPAN,
   FIGHT_TENSION_START,
+  REEL_IDLE_SPEED,
   REEL_LINE_RATE,
   REEL_STAMINA_DRAIN,
   REEL_TENSION_DRAG,
@@ -36,7 +37,7 @@ export type FightState = {
   runDir: -1 | 1;
   snapTimer: number;
   slackTimer: number;
-  reeling: boolean;
+  reelSpeed: number;
   pinTension: boolean;
 };
 
@@ -56,7 +57,7 @@ export function createFight(species: Species, lb: number, d: number, ax: number)
     runDir: 1,
     snapTimer: 0,
     slackTimer: 0,
-    reeling: false,
+    reelSpeed: 0,
     pinTension: false,
   };
 }
@@ -84,13 +85,10 @@ export function stepFight(fight: FightState, dt: number, rng: Rng): FightOutcome
     if (fight.runLeft <= 0) fight.running = false;
   }
 
-  if (fight.reeling) {
-    fight.lineOut -= REEL_LINE_RATE * (1 - REEL_TENSION_DRAG * fight.tension) * dt;
-    fight.tension += REEL_TENSION_RATE * dt;
-    fight.stamina -= REEL_STAMINA_DRAIN * dt;
-  } else {
-    fight.tension -= REST_TENSION_RATE * dt;
-  }
+  const reel = clamp(fight.reelSpeed, 0, 1);
+  fight.lineOut -= REEL_LINE_RATE * reel * (1 - REEL_TENSION_DRAG * fight.tension) * dt;
+  fight.tension += (REEL_TENSION_RATE * reel - REST_TENSION_RATE * (1 - reel)) * dt;
+  fight.stamina -= REEL_STAMINA_DRAIN * reel * dt;
 
   fight.stamina -= (fight.running ? STAMINA_DRAIN_RUNNING : STAMINA_DRAIN_IDLE) * dt;
   fight.tension = clamp(fight.tension, 0, 1);
@@ -104,7 +102,8 @@ export function stepFight(fight: FightState, dt: number, rng: Rng): FightOutcome
   fight.snapTimer = fight.tension >= 1 ? fight.snapTimer + dt : 0;
   if (fight.snapTimer >= SNAP_HOLD_S) return "snapped";
 
-  fight.slackTimer = fight.tension <= SLACK_TENSION && fight.lineOut > 0 ? fight.slackTimer + dt : 0;
+  const idle = reel <= REEL_IDLE_SPEED;
+  fight.slackTimer = idle && fight.tension <= SLACK_TENSION && fight.lineOut > 0 ? fight.slackTimer + dt : 0;
   if (fight.slackTimer >= SLACK_HOLD_S) return "slack";
 
   return "fighting";

@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "sim": "node tools/fightsim.mjs",
     "check": "tsc --noEmit && eslint . && vite build && node tools/drive.mjs"
   },
   "devDependencies": {

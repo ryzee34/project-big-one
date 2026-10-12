@@ -1,5 +1,17 @@
 import { clamp } from "../math";
-import { AIM_MARKER_D, AIM_MAX, WATER_FAR_SCALE, WATER_HALF_WIDTH_RATIO } from "./tuning";
+import {
+  AIM_MARKER_D,
+  AIM_MAX,
+  CIRCLE_MAX_STEP_REVS,
+  CIRCLE_MIN_STEP_PX,
+  CIRCLE_PRIME_REVS,
+  WATER_FAR_SCALE,
+  WATER_HALF_WIDTH_RATIO,
+  WHEEL_LINE_PX,
+  WHEEL_MAX_REVS_PER_EVENT,
+  WHEEL_PAGE_PX,
+  WHEEL_PX_PER_REV,
+} from "./tuning";
 import type { GameEvent, StateName } from "./types";
 
 export type KeyAction = "menu" | "mute" | "theme" | "log" | "help";
@@ -7,6 +19,39 @@ export type KeyAction = "menu" | "mute" | "theme" | "log" | "help";
 const UI_SELECTOR = "#ui";
 const CONTROL_SELECTOR = "button, input, select, textarea, a, [contenteditable]";
 const TEXT_SELECTOR = "input, select, textarea, [contenteditable]";
+const WHEEL_MODE_PX: Record<number, number> = { 0: 1, 1: WHEEL_LINE_PX, 2: WHEEL_PAGE_PX };
+const TAU = Math.PI * 2;
+
+export function wheelRevs(deltaY: number, deltaMode: number) {
+  const px = Math.abs(deltaY) * (WHEEL_MODE_PX[deltaMode] ?? 1);
+  return Math.min(WHEEL_MAX_REVS_PER_EVENT, px / WHEEL_PX_PER_REV);
+}
+
+export type Spin = { dir: number; wound: number };
+
+export function createSpin(): Spin {
+  return { dir: 0, wound: 0 };
+}
+
+export function headingTurn(previous: number, heading: number) {
+  let delta = heading - previous;
+  if (delta > Math.PI) delta -= TAU;
+  else if (delta < -Math.PI) delta += TAU;
+  return delta / TAU;
+}
+
+export function spinRevs(spin: Spin, turn: number) {
+  const dir = Math.sign(turn);
+  if (dir === 0 || Math.abs(turn) > CIRCLE_MAX_STEP_REVS || (spin.dir !== 0 && dir !== spin.dir)) {
+    spin.dir = 0;
+    spin.wound = 0;
+    return 0;
+  }
+  spin.dir = dir;
+  if (spin.wound >= CIRCLE_PRIME_REVS) return Math.abs(turn);
+  spin.wound += Math.abs(turn);
+  return spin.wound >= CIRCLE_PRIME_REVS ? spin.wound : 0;
+}
 
 export function aimFromPointer(clientX: number, left: number, width: number) {
   if (width <= 0) return 0;
@@ -41,7 +86,33 @@ export function bindInput(
   target.style.touchAction = "none";
   let activePointer: number | null = null;
   let spaceHeld = false;
+  let sample: { x: number; y: number } | null = null;
+  let heading: number | null = null;
+  let spin = createSpin();
   const arrows: Record<"ArrowLeft" | "ArrowRight", boolean> = { ArrowLeft: false, ArrowRight: false };
+
+  const resetCircle = () => {
+    sample = null;
+    heading = null;
+    spin = createSpin();
+  };
+
+  const circle = (x: number, y: number) => {
+    if (!sample) {
+      sample = { x, y };
+      return;
+    }
+    const dx = x - sample.x;
+    const dy = y - sample.y;
+    if (Math.hypot(dx, dy) < CIRCLE_MIN_STEP_PX) return;
+    sample = { x, y };
+    const next = Math.atan2(dy, dx);
+    if (heading !== null) {
+      const revs = spinRevs(spin, headingTurn(heading, next));
+      if (revs > 0) dispatch({ type: "crank", revs });
+    }
+    heading = next;
+  };
 
   const aimAt = (clientX: number) => {
     const rect = target.getBoundingClientRect();
@@ -63,6 +134,8 @@ export function bindInput(
     if (activePointer !== null) return;
     activePointer = event.pointerId;
     event.preventDefault();
+    resetCircle();
+    sample = { x: event.clientX, y: event.clientY };
     blurUi();
     capture(event.pointerId);
     if (getState() === "idle") aimAt(event.clientX);
@@ -71,18 +144,28 @@ export function bindInput(
 
   const onPointerMove = (event: PointerEvent) => {
     if (insideUi(event.target)) return;
-    if (getState() === "idle") aimAt(event.clientX);
+    const state = getState();
+    if (state === "idle") aimAt(event.clientX);
+    if (state === "fight" && activePointer !== null && event.pointerId === activePointer) circle(event.clientX, event.clientY);
+  };
+
+  const onWheel = (event: WheelEvent) => {
+    if (getState() !== "fight" || insideUi(event.target)) return;
+    event.preventDefault();
+    dispatch({ type: "crank", revs: wheelRevs(event.deltaY, event.deltaMode) });
   };
 
   const endPointer = (event: PointerEvent) => {
     if (activePointer === null || event.pointerId !== activePointer) return;
     activePointer = null;
+    resetCircle();
     dispatch({ type: "release" });
   };
 
   const releaseAll = () => {
     if (activePointer !== null) {
       activePointer = null;
+      resetCircle();
       dispatch({ type: "release" });
     }
     if (spaceHeld) {
@@ -173,6 +256,7 @@ export function bindInput(
   target.addEventListener("pointermove", onPointerMove);
   target.addEventListener("pointerup", endPointer);
   target.addEventListener("pointercancel", endPointer);
+  window.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("keyup", onKeyUp, true);
   window.addEventListener("blur", releaseAll);
@@ -182,6 +266,7 @@ export function bindInput(
     target.removeEventListener("pointermove", onPointerMove);
     target.removeEventListener("pointerup", endPointer);
     target.removeEventListener("pointercancel", endPointer);
+    window.removeEventListener("wheel", onWheel);
     window.removeEventListener("keydown", onKeyDown, true);
     window.removeEventListener("keyup", onKeyUp, true);
     window.removeEventListener("blur", releaseAll);

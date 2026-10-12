@@ -6,11 +6,17 @@ import {
   AIM_MAX,
   AIM_NUDGE_RATE,
   CATCH_LOG_CAP,
+  CRANK_DECAY_S,
+  CRANK_FULL_RPS,
+  HOLD_REEL_SPEED,
   HOOK_WINDOW_MS,
   HOOK_WINDOW_REDUCED_MS,
   LANDING_MS,
   LOST_TOAST_MS,
   NIBBLE_MS,
+  REEL_HINT_MAX_S,
+  REEL_IDLE_SPEED,
+  REEL_SPIN_RATE,
   RETRIEVE_MS,
   SNAP_SILENCE_MS,
   SPLASH_MS,
@@ -21,6 +27,7 @@ import type {
   Cue,
   Effect,
   GameEvent,
+  InputMode,
   Machine,
   MachineDeps,
   SaveData,
@@ -39,7 +46,7 @@ export const HINTS = {
   cast: "HOLD TO CAST",
   wait: "WAIT FOR IT",
   bite: "HIT IT",
-  fight: "HOLD TO REEL",
+  fight: { fine: "SCROLL TO REEL", coarse: "SPIN TO REEL" } as Record<InputMode, string>,
   gotIt: "YOU GOT IT",
   none: "",
 } as const;
@@ -49,7 +56,6 @@ export const TOASTS = {
   slack: "It threw the hook.",
 } as const;
 
-const REEL_SPIN_RATE = 120;
 const SCENARIO_D = 0.6;
 const SCENARIO_POWER = 0.5;
 const SCENARIO_FIGHT_STAMINA = 0.5;
@@ -65,6 +71,7 @@ class GameMachine implements Machine {
   private time = 0;
   private reduced: boolean;
   private theme: Theme;
+  private readonly inputMode: InputMode;
   private readonly save: SaveData;
   private readonly rng: MachineDeps["rng"];
   private readonly persist: (data: SaveData) => void;
@@ -91,6 +98,10 @@ class GameMachine implements Machine {
 
   private fight: FightState | null = null;
   private reelSpin = 0;
+  private holding = false;
+  private crankRate = 0;
+  private cranked = false;
+  private fightElapsed = 0;
 
   private landing: Snapshot["landing"] = null;
   private landingElapsedMs = 0;
@@ -112,6 +123,7 @@ class GameMachine implements Machine {
     this.rng = deps.rng;
     this.reduced = deps.reduced;
     this.theme = deps.theme;
+    this.inputMode = deps.inputMode;
     this.save = deps.save;
     this.persist = deps.persist;
     this.now = deps.now ?? null;
@@ -194,6 +206,9 @@ class GameMachine implements Machine {
       case "aim":
         if (this.state === "idle") this.aim = clamp(event.ax, -AIM_MAX, AIM_MAX);
         return;
+      case "crank":
+        this.crank(event.revs);
+        return;
       case "retrieve":
         if (this.state === "wait" || this.state === "bite") this.beginRetrieve();
         return;
@@ -233,6 +248,11 @@ class GameMachine implements Machine {
       lineOut: this.state === "fight" && fight ? fight.lineOut : null,
       reeling: this.isReeling(),
       reelSpin: this.reelSpin,
+      reelSpeed: this.state === "fight" && fight ? fight.reelSpeed : 0,
+      crank: this.crankRate,
+      holding: this.holding,
+      inputMode: this.inputMode,
+      showReelHint: this.state === "fight" && !this.cranked && this.fightElapsed < REEL_HINT_MAX_S,
       running: this.state === "fight" && fight ? fight.running : false,
       shadow,
       species: this.species ? this.species.id : null,
@@ -280,10 +300,9 @@ class GameMachine implements Machine {
       case "fight":
       case "fightSnap":
         this.placeFloat(SCENARIO_D, speciesById("bass"));
-        this.hook();
+        this.hook(false);
         if (this.fight) {
           this.fight.stamina = SCENARIO_FIGHT_STAMINA;
-          this.fight.reeling = false;
           if (target === "fightSnap") {
             this.fight.pinTension = true;
             this.fight.tension = 1;
@@ -292,24 +311,20 @@ class GameMachine implements Machine {
         return;
       case "landed":
         this.placeFloat(SCENARIO_D, speciesById("bass"), SCENARIO_LANDED_LB);
-        this.hook();
-        if (this.fight) {
-          this.fight.reeling = false;
-          this.fight.lineOut = 0;
-        }
+        this.hook(false);
+        if (this.fight) this.fight.lineOut = 0;
         this.land();
         return;
       case "lost":
         this.placeFloat(SCENARIO_D, speciesById("bass"));
-        this.hook();
-        if (this.fight) this.fight.reeling = false;
+        this.hook(false);
         this.lose("slack");
         return;
     }
   }
 
   private isReeling() {
-    if (this.state === "fight") return this.fight?.reeling ?? false;
+    if (this.state === "fight") return (this.fight?.reelSpeed ?? 0) > REEL_IDLE_SPEED;
     if (this.state === "retrieve") return true;
     if (this.state === "lost") return this.lost?.reason === "slack";
     return false;
@@ -369,7 +384,7 @@ class GameMachine implements Machine {
         this.hook();
         return;
       case "fight":
-        if (this.fight) this.fight.reeling = true;
+        this.holding = true;
         return;
       default:
         return;
@@ -382,11 +397,23 @@ class GameMachine implements Machine {
         this.launch(targetFor(this.power ?? 0));
         return;
       case "fight":
-        if (this.fight) this.fight.reeling = false;
+        this.holding = false;
         return;
       default:
         return;
     }
+  }
+
+  private crank(revs: number) {
+    if (this.state !== "fight" || !Number.isFinite(revs) || revs <= 0) return;
+    this.crankRate += revs / CRANK_DECAY_S;
+    this.cranked = true;
+  }
+
+  private reelSpeed() {
+    const holdSpeed = this.holding ? HOLD_REEL_SPEED : 0;
+    const crankSpeed = clamp(this.crankRate / CRANK_FULL_RPS, 0, 1);
+    return Math.max(holdSpeed, crankSpeed);
   }
 
   private stepIdle(dt: number) {
@@ -492,13 +519,17 @@ class GameMachine implements Machine {
     }
   }
 
-  private hook() {
+  private hook(holding = true) {
     const species = this.species;
     if (!species) return;
     this.state = "fight";
     this.fight = createFight(species, this.lb, this.float.d, this.float.ax);
-    this.fight.reeling = true;
-    this.hint = HINTS.fight;
+    this.holding = holding;
+    this.crankRate = 0;
+    this.cranked = false;
+    this.fightElapsed = 0;
+    this.fight.reelSpeed = this.reelSpeed();
+    this.hint = HINTS.fight[this.inputMode];
   }
 
   private stepFight(dt: number) {
@@ -507,7 +538,10 @@ class GameMachine implements Machine {
       this.toIdle();
       return;
     }
-    if (fight.reeling) this.reelSpin += REEL_SPIN_RATE * dt;
+    this.fightElapsed += dt;
+    this.crankRate *= Math.exp(-dt / CRANK_DECAY_S);
+    fight.reelSpeed = this.reelSpeed();
+    this.reelSpin += REEL_SPIN_RATE * fight.reelSpeed * dt;
     const outcome = stepFight(fight, dt, this.rng);
     this.float = { ax: fight.ax, d: Math.max(0, fight.lineOut) };
     switch (outcome) {
@@ -638,6 +672,10 @@ class GameMachine implements Machine {
     this.species = null;
     this.lb = 0;
     this.fight = null;
+    this.holding = false;
+    this.crankRate = 0;
+    this.cranked = false;
+    this.fightElapsed = 0;
     this.landing = null;
     this.card = null;
     this.lost = null;

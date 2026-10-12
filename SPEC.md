@@ -181,12 +181,43 @@ Pointer, mouse or touch, the whole stage is the target (`touch-action: none`):
 | IDLE | aim x | start CHARGE | cast | |
 | WAIT | | | | retrieve |
 | BITE | | | | hook |
-| FIGHT | | reel | rest | |
+| FIGHT | circle while held: crank | steady reel | rest | |
 | LANDED | | | | buttons |
+
+Mouse wheel or trackpad scroll in FIGHT: crank, either direction.
 
 Keyboard: Space is press and release. Left and Right slide the aim at 0.6 units per second.
 R retrieves. Escape opens and closes the menu. M mutes. T toggles day and night. L opens the
 log. ? opens the help card.
+
+### Reeling
+
+Reeling is a crank, not a switch. The machine keeps a smoothed crank rate in revolutions per
+second and turns it into `reelSpeed` in `[0, 1]`:
+
+- A `crank` event carries `revs`, a non-negative number of revolutions. On each event the rate
+  gains `revs / 0.3`; every step the rate decays by `exp(-dt / 0.3)`, so a steady input of R
+  revolutions per second settles at R. `crankSpeed = clamp(rate / 2.5, 0, 1)`: two and a half
+  revolutions per second is full speed.
+- Wheel: each `wheel` event in FIGHT is `revs = min(1, |deltaY| / 120)` with deltaY in pixels
+  (lines count 16 px each, pages 400 px), so a mouse notch is most of a turn and three notches a
+  second is full speed, and a light trackpad scroll beats the steady hold. Direction is ignored.
+  The event is consumed so the page never scrolls, unless it targets a control inside the HUD,
+  where panels keep scrolling.
+- Circle: while the pointer is held in FIGHT, each move at least 6 px from the last sample has a
+  heading. The signed change of heading between samples, wrapped to [-pi, pi], divided by 2 pi,
+  is a turn step. A step larger than a quarter turn, or one against the direction of the steps
+  before it, counts nothing and resets the spin. Steps in one direction accumulate and count only
+  once they reach half a turn; that half turn is then `revs`, and every further step in that
+  direction is `revs` on its own. Circling at any radius gives one revolution per loop; a straight
+  drag, a trembling finger or a scrub gives nothing. Mouse and touch alike.
+- Hold: while the press is held (pointer or Space) `holdSpeed = 0.5`, the steady reel.
+- `reelSpeed = max(holdSpeed, crankSpeed)`. `reeling` is `reelSpeed > 0.05`, and the reel handle
+  spins at `120 * reelSpeed` units per second.
+
+The fight hint reads SCROLL TO REEL on a fine pointer and SPIN TO REEL on a coarse one. The
+input mode is `(pointer: coarse)` at boot. A reel indicator (section 11) shows until the first
+crank of each fight, which for the circle means the first half turn.
 
 Accessibility: the canvas is `aria-hidden`; every control is a real button with a label; a
 polite live region announces state changes ("Cast, 42 yards", "Bite", "Landed a 4.2 lb bass",
@@ -225,16 +256,22 @@ value; `running` false. Per simulation step of `dt` seconds with species `S`:
 - A run starts with probability `S.runRate * clamp(stamina, 0, 1) * dt` and lasts
   `U(0.6, 1.4) * S.runLength` s. While running: `tension += pull * dt`,
   `lineOut += S.runSpeed * dt` (cap 1).
-- Reeling: `lineOut -= 0.11 * (1 - 0.6 * tension) * dt`, `tension += 0.9 * dt`,
-  `stamina -= 0.08 * dt`.
-- Not reeling: `tension -= 1.2 * dt`.
+- With `reelSpeed` from section 3: `lineOut -= 0.14 * reelSpeed * (1 - 0.6 * tension) * dt`,
+  `tension += (0.9 * reelSpeed - 1.2 * (1 - reelSpeed)) * dt`, `stamina -= 0.08 * reelSpeed * dt`.
+  At rest tension falls 1.2 per second; a full crank raises it 0.9 per second; the steady hold
+  at 0.5 lets it fall 0.15 per second. Holding alone lands perch and bass and takes about twelve
+  seconds on a bass; tuna, shark and the big one pull harder than the hold can shed, so they need
+  the crank, and rests whenever they run.
 - Always: `stamina -= (running ? 0.10 : 0.02) * dt`. `tension` is clamped to `[0, 1]`.
 - Snap: `tension >= 1` for 0.5 s without a break: `LOST`, "Snapped the line."
-- Slack: `tension <= 0.04` for 2.5 s while `lineOut > 0`: `LOST`, "It threw the hook."
+- Slack: `tension <= 0.04` for 2.5 s while `lineOut > 0` and `reelSpeed <= 0.05`: `LOST`, "It
+  threw the hook." A line being taken in cannot go slack.
 - Land: `lineOut <= 0`: `LANDED`.
 
-The tension meter has three zones: 0 to 0.6 in `ink-soft`, 0.6 to 0.85 in `accent`, 0.85 to 1
-in `accentDark` with the creak sound. The rod bend and the line sag follow `tension`. Fish
+The tension meter has three zones: 0 to 0.4 in `ink-soft`, 0.4 to 0.85 in `accent`, 0.85 to 1
+in `accentDark` with the creak sound. The orange zone starts at 0.4 because that is where a big
+fish needs you to stop cranking: resting at 0.3 lands the marlin about seven times in ten in the
+simulator, resting at 0.6 never does. The rod bend and the line sag follow `tension`. Fish
 stamina is not shown; the surfacing shadow is the tell. Every constant above lives in
 `src/game/tuning.ts`.
 
@@ -254,8 +291,10 @@ theme, night the dark one.
 
 Shark and marlin pull were first written as 1.5 and 1.7. A 300-fight simulation of the section 6
 model showed the marlin snapping the line every time at 1.7, because a run adds tension faster than
-resting relieves it, and the shark snapping about four times in ten. At 1.38 and 1.32 the marlin lands
-about nine times in ten after a long fight and the shark nearly always. Those are the values that ship.
+resting relieves it, and the shark snapping about four times in ten. At 1.38 and 1.32, with the
+crank fading as in section 3 and the player resting whenever the fish runs or tension passes 0.3,
+the marlin lands about seven times in ten after a long fight and the shark about nine in ten.
+Those are the values that ship.
 
 The big one only takes a bait at `d >= 0.9`, and only once three fish are in the log. In that
 case it replaces the far roll with probability 0.08 at night and 0.03 by day. Landing it puts a
@@ -326,7 +365,7 @@ the HUD button), stored in settings. Nothing is loaded; every effect is synthesi
 | plop | sine 420 to 90 Hz over 120 ms plus a noise tick |
 | nibble | square 880 Hz, 40 ms |
 | bite | sine 140 Hz, 160 ms, plus noise |
-| reel | a noise tick every 90 ms while reeling, pitch rising with speed |
+| reel | a noise tick every 140 ms at the steady reel down to 60 ms at full crank, pitch rising with speed; the retrieve and the lost reel-in tick at the fast cadence |
 | creak | sawtooth 70 Hz with vibrato while tension is above 0.85 |
 | snap | noise burst 60 ms, then 400 ms of silence before the toast |
 | landed | square arpeggio C5 E5 G5, 90 ms each |
@@ -341,8 +380,23 @@ uppercase, 3 px edge, 3 px hard shadow).
 - Top left: the creel pill with the `CREEL` icon and the kept count. Opens the log.
 - Top right: theme, mute and menu pills with baked pixel icons. On narrow stages the pills shrink
   to icons only.
-- Bottom centre: the state hint. HOLD TO CAST, WAIT FOR IT, HIT IT, HOLD TO REEL, and the
-  LOST toasts.
+- Bottom centre: the state hint. HOLD TO CAST, WAIT FOR IT, HIT IT, SCROLL TO REEL or SPIN TO
+  REEL by input mode, and the LOST toasts.
+- Reel indicator: a pill near the reel, left of the angler and above the deck, shown while
+  `showReelHint` is true: during FIGHT until the first crank event of that fight, or for eight
+  seconds at most. Coarse pointer: a circular-arrow pixel icon turning slowly with the label
+  SPIN. Fine pointer: a mouse-wheel pixel icon with up and down arrows and the label SCROLL.
+  The turn is a CSS animation on wall time. Static under reduced motion.
+- Intro card, first visit only: HOW TO FISH centred below the title block, four rows with pixel
+  icons.
+  Hold to charge, let go to cast. Wait: a dip is a nibble, under is a bite. Tap the moment it
+  goes under. Spin to reel in (coarse) or Scroll the wheel to reel in, hold to reel steady
+  (fine). A GOT IT pill closes it, as do Escape, Space, Enter or a press on the stage, and that
+  press or key does not cast; ? and L close it and open help or the log. Closing stores
+  `the-big-one:intro` in localStorage so it never returns; the menu's Help shows the same rows
+  plus a fifth row for the keys.
+- Haptics: on devices with `navigator.vibrate`, after the first user gesture, a 20 ms pulse on
+  the bite and 30 ms pulses every 250 ms while tension is above 0.85 in a fight.
 - Power meter: canvas, vertical, 4 cells wide and 24 tall, left of the angler, `accent` fill with
   a `white` top segment for the perfect zone.
 - Tension meter: canvas, horizontal, top centre, 40 % of the grid wide and 3 cells tall, the
@@ -372,11 +426,11 @@ src/pixel/bitmaps.ts  palettes.ts  raster.ts  angler.ts
 src/scene/stage.ts  geometry.ts  sky.ts  water.ts  pier.ts  rod.ts  bobber.ts  fish.ts
           effects.ts  render.ts
 src/game/types.ts  tuning.ts  species.ts  rng.ts  machine.ts  cast.ts  wait.ts  fight.ts
-         loop.ts  input.ts  save.ts  audio.ts  theme.ts  debug.ts
-src/ui/hud.ts  card.ts  log.ts  menu.ts  icons.ts
+         loop.ts  input.ts  save.ts  audio.ts  haptics.ts  theme.ts  debug.ts
+src/ui/hud.ts  card.ts  log.ts  menu.ts  icons.ts  dom.ts  howto.ts  intro.ts  reelhint.ts
 src/styles.css
 public/fonts/
-tools/drive.mjs
+tools/drive.mjs  fightsim.mjs
 SPEC.md  README.md
 ```
 
@@ -385,7 +439,7 @@ SPEC.md  README.md
 - Random: mulberry32 seeded from `?seed=` or `Date.now()`. Every draw goes through it.
   `Math.random` is not used anywhere.
 - Debug hook, only with `?debug=1`: `window.game = { state(), press(), release(), aim(ax),
-  tick(ms), goto(name, scenario) }`. Scenarios: `wait` (bobber at `d = 0.6`), `bite`,
+  crank(revs), tick(ms), goto(name, scenario) }`. Scenarios: `wait` (bobber at `d = 0.6`), `bite`,
   `fight` (bass, stamina 0.5), `fightSnap` (tension pinned at 1), `landed` (bass, 4.2 lb),
   `lost`.
 - Conventions: no code comments, small modules, functions over classes except the machine,
@@ -411,6 +465,21 @@ SPEC.md  README.md
 7. The default viewport is 1440 by 900. Steps 1 to 5 repeat at 390 by 844, where the angler, the
    meters and the hint must also be inside the viewport.
 8. No console errors in any step. Screenshots go to `tools/out`, which is ignored by git.
+9. First load shows the intro card; GOT IT hides it and sets the localStorage flag; a reload
+   does not show it again.
+10. `goto fight`: the reel indicator is visible and `showReelHint` is true. Twelve real wheel
+    events of 100 px over 600 ms raise `crank` above zero and `reelSpeed` above the steady
+    hold, hide the indicator, and reduce `lineOut`. On the phone size the same is done with a
+    real circular touch drag of about two loops. This step runs at speed 1, because the crank
+    fades in simulation time while the input is timed in wall time.
+11. `goto fight` then a 30 s hold with no crank lands the bass: the steady reel alone wins a
+    half-tired fish.
+12. `tools/fightsim.mjs` runs the section 6 model for every species under three policies,
+    hold only, full crank with rests, and full crank without rests, and prints landing rates.
+    It reads its constants from `src/game/tuning.ts` and `src/game/species.ts`, models the
+    crank's gain and fade, and its rests policy rests while the fish runs or tension is above
+    0.3. Bass lands under hold only about nine times in ten; the marlin lands with crank and
+    rests more often than not; a full crank straight through a run snaps.
 
 Build output under 120 KB gzipped. Then the hand check: ten rounds on the desktop and five on a
 phone; a nibble and a bite read differently at a glance; a fight is winnable but not free; a
@@ -434,6 +503,9 @@ later.
 - The angler is shown from behind, over the shoulder, instead of first-person hands. Decided on
   7 October after the first play: the hands read as a head, and a figure facing the water feels
   more natural.
+- Reeling is a crank: the mouse wheel on a desktop, a circling finger on a phone, with the held
+  press as the steady fallback, plus an intro card and a reel indicator so players know. Decided on
+  11 October: holding felt flat, and a spin is the gesture a reel asks for.
 
 ## 16. Build order
 

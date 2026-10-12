@@ -1,14 +1,17 @@
 import { loadSave } from "../game/save";
 import { speciesById } from "../game/species";
 import { applyTheme, resolveTheme } from "../game/theme";
-import type { GameEvent, SaveData, Snapshot, StateName, Theme } from "../game/types";
+import type { GameEvent, InputMode, SaveData, Snapshot, StateName, Theme } from "../game/types";
 import { CREEL, MOON_ICON, SUN_ICON } from "../pixel/bitmaps";
 import { yardsFor } from "../scene/geometry";
 import { createCard } from "./card";
 import { el, formatLb, setAttr, setClass, setInert, setText, stopAll } from "./dom";
+import { detectInputMode } from "./howto";
 import { MENU_ICON, SPEAKER_OFF, SPEAKER_ON, pixelIcon } from "./icons";
+import { createIntro } from "./intro";
 import { createLog } from "./log";
 import { createMenu } from "./menu";
+import { createReelHint } from "./reelhint";
 
 export type Ui = { update(snap: Snapshot): void };
 
@@ -31,7 +34,7 @@ function announcement(prev: Snapshot | null, snap: Snapshot): string | null {
     case "bite":
       return "Bite";
     case "fight":
-      return "Hooked, hold to reel";
+      return "Hooked, reel it in";
     case "retrieve":
       return "Reeling in";
     case "lost":
@@ -77,6 +80,8 @@ export function mountUi(root: HTMLElement, deps: Deps): Ui {
   const hint = el("p", { class: "pill hud-hint", "data-ui": "hint", text: "" });
   const toast = el("p", { class: "pill is-accent hud-toast", "data-ui": "toast", role: "status", text: "" });
   const bottom = el("div", { class: "hud-bottom" }, [toast, hint]);
+  const reelHint = createReelHint();
+  const intro = createIntro(detectInputMode());
 
   const live = el("div", { class: "visually-hidden", "data-ui": "live", "aria-live": "polite", "aria-atomic": "true" });
 
@@ -120,7 +125,7 @@ export function mountUi(root: HTMLElement, deps: Deps): Ui {
   mute.addEventListener("click", () => dispatch({ type: "mute", muted: !(latest?.muted ?? false) }));
   menu.addEventListener("click", () => dispatch({ type: "menu", open: !(latest?.menuOpen ?? false) }));
 
-  const hud = el("div", { class: "hud" }, [topLeft, topRight, titleBlock, bottom, live, card.el, menuPanel.el, log.el]);
+  const hud = el("div", { class: "hud" }, [topLeft, topRight, titleBlock, reelHint.el, bottom, live, intro.el, card.el, menuPanel.el, log.el]);
   for (const pill of [creel, theme, mute, menu]) {
     stopAll(pill);
     pill.addEventListener("click", (event) => {
@@ -225,6 +230,9 @@ export function mountUi(root: HTMLElement, deps: Deps): Ui {
 
   const update = (snap: Snapshot) => {
     latest = snap;
+    const mode: InputMode = snap.inputMode;
+    intro.setMode(mode);
+    reelHint.update(snap.showReelHint, mode);
 
     if (snap.theme !== lastTheme) {
       lastTheme = snap.theme;

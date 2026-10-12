@@ -696,3 +696,99 @@ a:focus-visible {
     text-wrap: balance;
   }
 }
+
+.howto-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.howto-row {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 0 12px;
+  align-items: start;
+}
+
+.howto-icon {
+  display: flex;
+  justify-content: center;
+  padding-top: 1px;
+  color: var(--ink);
+}
+
+.howto-text {
+  display: grid;
+  gap: 2px;
+}
+
+.howto-term {
+  color: var(--ink-faint);
+}
+
+.howto-body {
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.icon rect[data-k="a"] {
+  fill: var(--accent);
+}
+
+.icon rect[data-k="p"] {
+  fill: var(--icon-white, #ffffff);
+}
+
+:root[data-theme="light"] {
+  --icon-white: #8aa2a6;
+}
+
+.intro-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  pointer-events: none;
+}
+
+.intro-card {
+  width: min(100%, 380px);
+  pointer-events: auto;
+}
+
+.intro-footer .pill {
+  padding: 7px 15px;
+}
+
+.reel-hint {
+  position: absolute;
+  right: calc(32vw + 8px);
+  bottom: calc(7vh + 20px);
+  gap: 8px;
+  padding: 5px 12px;
+  min-height: 36px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.reel-hint .icon-spin {
+  transform-origin: 50% 50%;
+  animation: reel-hint-spin 2s steps(4, end) infinite;
+}
+
+@keyframes reel-hint-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reel-hint .icon-spin {
+    animation: none;
+  }
+}

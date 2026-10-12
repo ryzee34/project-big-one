@@ -107,3 +107,99 @@ export function pixelIcon(bitmap: Bitmap, className = "icon"): SVGSVGElement {
   }
   return svg;
 }
+
+export const SPIN_ICON: Bitmap = [
+  ".............",
+  "....sssss....",
+  "...ss...ss...",
+  "..ss.....ss..",
+  "..s.......ss.",
+  ".ss....sssss.",
+  ".ss.....sss..",
+  ".ss......s...",
+  "..s..........",
+  "..ss.........",
+  "...ss...ss...",
+  "....sssss....",
+  ".............",
+];
+
+export const WHEEL_ICON: Bitmap = [
+  "......s......",
+  ".....sss.....",
+  "....sssss....",
+  ".............",
+  "...sssssss...",
+  "...s.....s...",
+  "...s..s..s...",
+  "...s..s..s...",
+  "...sssssss...",
+  ".............",
+  "....sssss....",
+  ".....sss.....",
+  "......s......",
+];
+
+export const HOLD_ICON: Bitmap = [
+  ".....ss......",
+  "....ssss.....",
+  "....ssss.....",
+  "....ssss.....",
+  "....ssss.....",
+  "....ssssss...",
+  "....ssssssss.",
+  ".ss.ssssssss.",
+  ".sssssssssss.",
+  "..ssssssssss.",
+  "..ssssssssss.",
+  "...ssssssss..",
+  "....ssssss...",
+];
+
+export const TAP_ICON: Bitmap = [
+  ".s...ss...s..",
+  "..s..ss..s...",
+  "....ssss.....",
+  "....ssss.....",
+  "....ssss.....",
+  "....ssssss...",
+  "....ssssssss.",
+  ".ss.ssssssss.",
+  ".sssssssssss.",
+  "..ssssssssss.",
+  "..ssssssssss.",
+  "...ssssssss..",
+  "....ssssss...",
+];
+
+export const FLOAT_ICON: Bitmap = [
+  ".............",
+  ".....aaa.....",
+  "....aaaaa....",
+  "....aaaaa....",
+  ".....ppp.....",
+  ".....ppp.....",
+  ".ss..ppp..ss.",
+  "..ss..p..ss..",
+  ".............",
+  "...ss....ss..",
+  "....ss..ss...",
+  ".............",
+  ".............",
+];
+
+export const KEYS_ICON: Bitmap = [
+  ".............",
+  ".............",
+  "sssssssssssss",
+  "s...........s",
+  "s.s.s.s.s.s.s",
+  "s...........s",
+  "s.s.s.s.s.s.s",
+  "s...........s",
+  "s..sssssss..s",
+  "s...........s",
+  "sssssssssssss",
+  ".............",
+  ".............",
+];

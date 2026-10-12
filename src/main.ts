@@ -1,5 +1,6 @@
 import { createAudio } from "./game/audio";
 import { exposeDebug } from "./game/debug";
+import { createHaptics } from "./game/haptics";
 import { bindInput, type KeyAction } from "./game/input";
 import { startLoop } from "./game/loop";
 import { createMachine } from "./game/machine";
@@ -10,6 +11,7 @@ import { applyTheme, initialTheme, storedTheme, watchTheme } from "./game/theme"
 import type { GameEvent, Snapshot } from "./game/types";
 import { createRenderer } from "./scene/render";
 import { createStage } from "./scene/stage";
+import { detectInputMode } from "./ui/howto";
 import { mountUi } from "./ui/hud";
 
 const params = readParams(window.location.search);
@@ -32,10 +34,12 @@ const rng = params.seed === null ? createLazyRng(seedFromClock) : createRng(para
 
 const boot = () => {
   const audio = createAudio();
+  const haptics = createHaptics();
   const machine = createMachine({
     rng,
     reduced: motion.matches,
     theme,
+    inputMode: detectInputMode(),
     save: loadSave(),
     persist: storeSave,
     now: () => Date.now(),
@@ -49,6 +53,7 @@ const boot = () => {
     renderer.render(snap, snap.reduced ? 0 : now);
     ui.update(snap);
     audio.update(snap);
+    haptics.update(snap);
     for (const cue of snap.cues) audio.play(cue);
   };
   const loop = startLoop({ machine, render, speed: params.speed });
