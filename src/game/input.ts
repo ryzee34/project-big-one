@@ -11,6 +11,8 @@ import {
   WHEEL_MAX_REVS_PER_EVENT,
   WHEEL_PAGE_PX,
   WHEEL_PX_PER_REV,
+  WHEEL_STREAM_GAP_MS,
+  WHEEL_STREAM_PX_PER_REV,
 } from "./tuning";
 import type { GameEvent, StateName } from "./types";
 
@@ -22,9 +24,9 @@ const TEXT_SELECTOR = "input, select, textarea, [contenteditable]";
 const WHEEL_MODE_PX: Record<number, number> = { 0: 1, 1: WHEEL_LINE_PX, 2: WHEEL_PAGE_PX };
 const TAU = Math.PI * 2;
 
-export function wheelRevs(deltaY: number, deltaMode: number) {
+export function wheelRevs(deltaY: number, deltaMode: number, streamed = false) {
   const px = Math.abs(deltaY) * (WHEEL_MODE_PX[deltaMode] ?? 1);
-  return Math.min(WHEEL_MAX_REVS_PER_EVENT, px / WHEEL_PX_PER_REV);
+  return Math.min(WHEEL_MAX_REVS_PER_EVENT, px / (streamed ? WHEEL_STREAM_PX_PER_REV : WHEEL_PX_PER_REV));
 }
 
 export type Spin = { dir: number; wound: number };
@@ -149,10 +151,13 @@ export function bindInput(
     if (state === "fight" && activePointer !== null && event.pointerId === activePointer) circle(event.clientX, event.clientY);
   };
 
+  let lastWheelAt = -Infinity;
   const onWheel = (event: WheelEvent) => {
     if (getState() !== "fight" || insideUi(event.target)) return;
     event.preventDefault();
-    dispatch({ type: "crank", revs: wheelRevs(event.deltaY, event.deltaMode) });
+    const streamed = event.timeStamp - lastWheelAt < WHEEL_STREAM_GAP_MS;
+    lastWheelAt = event.timeStamp;
+    dispatch({ type: "crank", revs: wheelRevs(event.deltaY, event.deltaMode, streamed) });
   };
 
   const endPointer = (event: PointerEvent) => {

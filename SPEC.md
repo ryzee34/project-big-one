@@ -199,9 +199,13 @@ second and turns it into `reelSpeed` in `[0, 1]`:
   gains `revs / 0.3`; every step the rate decays by `exp(-dt / 0.3)`, so a steady input of R
   revolutions per second settles at R. `crankSpeed = clamp(rate / 2.5, 0, 1)`: two and a half
   revolutions per second is full speed.
-- Wheel: each `wheel` event in FIGHT is `revs = min(1, |deltaY| / 120)` with deltaY in pixels
-  (lines count 16 px each, pages 400 px), so a mouse notch is most of a turn and three notches a
-  second is full speed, and a light trackpad scroll beats the steady hold. Direction is ignored.
+- Wheel: each `wheel` event in FIGHT is `revs = min(1, |deltaY| / scale)` with deltaY in pixels
+  (lines count 16 px each, pages 400 px). The scale is 120 px per turn for an event that arrives
+  40 ms or more after the previous one, a mouse notch, so three notches a second is full speed.
+  An event that follows the previous one within 40 ms is part of a stream, a trackpad, and
+  counts at 1000 px per turn, so one swipe with its momentum is a burst at about two thirds
+  speed, a gentle scroll stays under the steady hold, and only a sustained hard scroll reaches
+  full. Direction is ignored.
   The event is consumed so the page never scrolls, unless it targets a control inside the HUD,
   where panels keep scrolling.
 - Circle: while the pointer is held in FIGHT, each move at least 6 px from the last sample has a
@@ -257,13 +261,14 @@ value; `running` false. Per simulation step of `dt` seconds with species `S`:
   `U(0.6, 1.4) * S.runLength` s. While running: `tension += pull * dt`,
   `lineOut += S.runSpeed * dt` (cap 1).
 - With `reelSpeed` from section 3: `lineOut -= 0.14 * reelSpeed * (1 - 0.6 * tension) * dt`,
-  `tension += (0.9 * reelSpeed - 1.2 * (1 - reelSpeed)) * dt`, `stamina -= 0.08 * reelSpeed * dt`.
-  At rest tension falls 1.2 per second; a full crank raises it 0.9 per second; the steady hold
-  at 0.5 lets it fall 0.15 per second. Holding alone lands perch and bass and takes about twelve
+  `tension += (0.7 * reelSpeed - 1.2 * (1 - reelSpeed)) * dt`, `stamina -= 0.08 * reelSpeed * dt`.
+  At rest tension falls 1.2 per second; a full crank raises it 0.7 per second; the steady hold
+  at 0.5 lets it fall 0.25 per second. Holding alone lands perch and bass and takes about twelve
   seconds on a bass; tuna, shark and the big one pull harder than the hold can shed, so they need
   the crank, and rests whenever they run.
 - Always: `stamina -= (running ? 0.10 : 0.02) * dt`. `tension` is clamped to `[0, 1]`.
-- Snap: `tension >= 1` for 0.5 s without a break: `LOST`, "Snapped the line."
+- Snap: `tension >= 1` for 0.8 s without a break: `LOST`, "Snapped the line." The grace is
+  long enough to see the red and stop cranking.
 - Slack: `tension <= 0.04` for 2.5 s while `lineOut > 0` and `reelSpeed <= 0.05`: `LOST`, "It
   threw the hook." A line being taken in cannot go slack.
 - Land: `lineOut <= 0`: `LANDED`.
@@ -271,7 +276,7 @@ value; `running` false. Per simulation step of `dt` seconds with species `S`:
 The tension meter has three zones: 0 to 0.4 in `ink-soft`, 0.4 to 0.85 in `accent`, 0.85 to 1
 in `accentDark` with the creak sound. The orange zone starts at 0.4 because that is where a big
 fish needs you to stop cranking: resting at 0.3 lands the marlin about seven times in ten in the
-simulator, resting at 0.6 never does. The rod bend and the line sag follow `tension`. Fish
+simulator, resting at 0.6 never did under the earlier, harsher crank. The rod bend and the line sag follow `tension`. Fish
 stamina is not shown; the surfacing shadow is the tell. Every constant above lives in
 `src/game/tuning.ts`.
 
@@ -293,7 +298,7 @@ Shark and marlin pull were first written as 1.5 and 1.7. A 300-fight simulation 
 model showed the marlin snapping the line every time at 1.7, because a run adds tension faster than
 resting relieves it, and the shark snapping about four times in ten. At 1.38 and 1.32, with the
 crank fading as in section 3 and the player resting whenever the fish runs or tension passes 0.3,
-the marlin lands about seven times in ten after a long fight and the shark about nine in ten.
+the marlin lands about eight times in ten after a long fight and the shark nearly always.
 Those are the values that ship.
 
 The big one only takes a bait at `d >= 0.9`, and only once three fish are in the log. In that
@@ -479,8 +484,8 @@ SPEC.md  README.md
     hold only, full crank with rests, and full crank without rests, and prints landing rates.
     It reads its constants from `src/game/tuning.ts` and `src/game/species.ts`, models the
     crank's gain and fade, and its rests policy rests while the fish runs or tension is above
-    0.3. Bass lands under hold only about nine times in ten; the marlin lands with crank and
-    rests more often than not; a full crank straight through a run snaps.
+    0.3. Bass lands under hold only nearly always; the marlin lands with crank and rests about
+    eight times in ten; a full crank straight through a run snaps.
 
 Build output under 120 KB gzipped. Then the hand check: ten rounds on the desktop and five on a
 phone; a nibble and a bite read differently at a glance; a fight is winnable but not free; a
@@ -507,6 +512,9 @@ later.
 - Reeling is a crank: the mouse wheel on a desktop, a circling finger on a phone, with the held
   press as the steady fallback, plus an intro card and a reel indicator so players know. Decided on
   11 October: holding felt flat, and a spin is the gesture a reel asks for.
+- The wheel was loosened on 13 October after Ryan's trackpad snapped the line twice from one
+  swipe: streamed wheel events count at 1000 px per turn, the crank raises tension 0.7 per second
+  instead of 0.9, and the line holds for 0.8 s at full tension before it snaps.
 
 ## 16. Build order
 
