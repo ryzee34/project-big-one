@@ -792,3 +792,11 @@ a:focus-visible {
     animation: none;
   }
 }
+
+.intro-note {
+  margin: 12px 0 0;
+  font-family: var(--font-display);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
