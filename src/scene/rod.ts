@@ -14,7 +14,7 @@ import {
 import type { AnglerSprite } from "../pixel/angler";
 import { REEL_ORBIT } from "../pixel/bitmaps";
 import { spriteColours, type ColourMap, type Palette } from "../pixel/palettes";
-import { bitmapSize, drawPixelCurve, drawPixelLine } from "../pixel/raster";
+import { bitmapSize, drawPixelCurve, drawSolidLine } from "../pixel/raster";
 import type { Geometry, Point } from "./geometry";
 
 export type RodFrame = { tension: number; bob: number; dip: number; reelSpin: number; reeling: boolean };
@@ -56,8 +56,8 @@ export function paintRod(ctx: CanvasRenderingContext2D, g: Geometry, palette: Pa
     x: lerp(grip.x, tip.x, ROD_THICK_SHARE),
     y: lerp(grip.y, tip.y, ROD_THICK_SHARE),
   };
-  drawPixelLine(ctx, grip, tip, palette.rod);
-  drawPixelLine(ctx, { x: grip.x + 1, y: grip.y }, { x: thick.x + 1, y: thick.y }, palette.rod);
+  drawSolidLine(ctx, grip, tip, palette.rod);
+  drawSolidLine(ctx, { x: grip.x + 1, y: grip.y }, { x: thick.x + 1, y: thick.y }, palette.rod);
 }
 
 export function paintAngler(

@@ -64,6 +64,41 @@ export function drawPixelLine(
   }
 }
 
+export function drawSolidLine(
+  ctx: CanvasRenderingContext2D,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  colour: string,
+) {
+  let x = Math.round(from.x);
+  let y = Math.round(from.y);
+  const endX = Math.round(to.x);
+  const endY = Math.round(to.y);
+  const dx = Math.abs(endX - x);
+  const dy = Math.abs(endY - y);
+  const stepX = x < endX ? 1 : -1;
+  const stepY = y < endY ? 1 : -1;
+  let error = dx - dy;
+
+  ctx.fillStyle = colour;
+  for (let guard = 0; guard < 4000; guard++) {
+    ctx.fillRect(x, y, 1, 1);
+    if (x === endX && y === endY) break;
+    const doubled = 2 * error;
+    let movedX = false;
+    if (doubled > -dy) {
+      error -= dy;
+      x += stepX;
+      movedX = true;
+    }
+    if (doubled < dx) {
+      error += dx;
+      y += stepY;
+      if (movedX) ctx.fillRect(x - stepX, y, 1, 1);
+    }
+  }
+}
+
 export function drawPixelCurve(
   ctx: CanvasRenderingContext2D,
   from: { x: number; y: number },
