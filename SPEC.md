@@ -396,8 +396,9 @@ uppercase, 3 px edge, 3 px hard shadow).
 - Intro card, first visit only: HOW TO FISH centred below the title block, four rows with pixel
   icons.
   Hold to charge, let go to cast. Watch the bobber and wait for a fish to pull it underwater.
-  Tap the moment it goes under. Spin to reel in (coarse) or Scroll the wheel to reel in, hold to reel steady
-  (fine). A GOT IT pill closes it, as do Escape, Space, Enter or a press on the stage, and that
+  Tap the moment it goes under. Spin your finger on the screen to reel in (coarse) or Scroll the wheel to reel in, hold to reel steady
+  (fine). On a fine pointer a muted line follows the rows: For the best
+  experience, play it on a mobile device (in my opinion). A GOT IT pill closes it, as do Escape, Space, Enter or a press on the stage, and that
   press or key does not cast; ? and L close it and open help or the log. Closing stores
   `the-big-one:intro` in localStorage so it never returns; the menu's Help shows the same rows
   plus a fifth row for the keys.
@@ -512,7 +513,7 @@ later.
 - Reeling is a crank: the mouse wheel on a desktop, a circling finger on a phone, with the held
   press as the steady fallback, plus an intro card and a reel indicator so players know. Decided on
   11 October: holding felt flat, and a spin is the gesture a reel asks for.
-- The wheel was loosened on 13 October after Ryan's trackpad snapped the line twice from one
+- The wheel was loosened on 13 October after my trackpad snapped the line twice from one
   swipe: streamed wheel events count at 1000 px per turn, the crank raises tension 0.7 per second
   instead of 0.9, and the line holds for 0.8 s at full tension before it snaps.
 
