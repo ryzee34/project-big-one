@@ -19,7 +19,7 @@ export function createLog(deps: Deps): LogPanel {
     pixelIcon(CLOSE_ICON),
   ]);
   const header = el("div", { class: "panel-head" }, [
-    el("h2", { class: "panel-title", id: "log-title", text: "Creel" }),
+    el("h2", { class: "panel-title", id: "log-title", text: "Catches of the day" }),
     closeButton,
   ]);
   const summary = el("p", { class: "card-prose panel-summary", "data-ui": "log-summary" });
