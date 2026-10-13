@@ -20,9 +20,13 @@ export function howToRows(mode: InputMode): HowToRow[] {
     { id: "wait", icon: FLOAT_ICON, term: "Wait", body: "Watch the bobber and wait for a fish to pull it underwater." },
     { id: "hook", icon: TAP_ICON, term: "Hook", body: "Tap the moment it goes under." },
     mode === "coarse"
-      ? { id: "reel", icon: SPIN_ICON, term: "Reel", body: "Spin to reel in." }
+      ? { id: "reel", icon: SPIN_ICON, term: "Reel", body: "Spin your finger on the screen to reel in." }
       : { id: "reel", icon: WHEEL_ICON, term: "Reel", body: "Scroll the wheel to reel in, hold to reel steady." },
   ];
+}
+
+export function introNote(mode: InputMode): string | null {
+  return mode === "fine" ? "For the best experience, play it on a mobile device." : null;
 }
 
 export function renderHowTo(list: HTMLElement, rows: HowToRow[]) {

@@ -396,8 +396,9 @@ uppercase, 3 px edge, 3 px hard shadow).
 - Intro card, first visit only: HOW TO FISH centred below the title block, four rows with pixel
   icons.
   Hold to charge, let go to cast. Watch the bobber and wait for a fish to pull it underwater.
-  Tap the moment it goes under. Spin to reel in (coarse) or Scroll the wheel to reel in, hold to reel steady
-  (fine). A GOT IT pill closes it, as do Escape, Space, Enter or a press on the stage, and that
+  Tap the moment it goes under. Spin your finger on the screen to reel in (coarse) or Scroll the wheel to reel in, hold to reel steady
+  (fine). On a fine pointer a muted line follows the rows: For the best
+  experience, play it on a mobile device. A GOT IT pill closes it, as do Escape, Space, Enter or a press on the stage, and that
   press or key does not cast; ? and L close it and open help or the log. Closing stores
   `the-big-one:intro` in localStorage so it never returns; the menu's Help shows the same rows
   plus a fifth row for the keys.

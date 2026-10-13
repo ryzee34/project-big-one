@@ -1,6 +1,6 @@
 import type { InputMode } from "../game/types";
 import { el, releaseFocus, setHidden, stopAll, trapFocus } from "./dom";
-import { howToRows, introSeen, markIntroSeen, renderHowTo } from "./howto";
+import { howToRows, introNote, introSeen, markIntroSeen, renderHowTo } from "./howto";
 
 export type IntroCard = {
   el: HTMLElement;
@@ -13,6 +13,7 @@ const CONTROL_SELECTOR = "button, input, select, textarea, a";
 
 export function createIntro(initialMode: InputMode): IntroCard {
   const list = el("ul", { class: "howto-list", "data-ui": "intro-rows" });
+  const note = el("p", { class: "intro-note", "data-ui": "intro-note", text: "" });
   const done = el("button", { type: "button", class: "pill is-accent", "data-action": "intro-done", text: "GOT IT" });
   const card = el(
     "section",
@@ -20,6 +21,7 @@ export function createIntro(initialMode: InputMode): IntroCard {
     [
       el("h2", { class: "panel-title", id: "intro-title", text: "How to fish" }),
       list,
+      note,
       el("div", { class: "card-footer intro-footer" }, [el("span", { class: "pixel-label panel-note", text: "? for help" }), done]),
     ],
   );
@@ -30,12 +32,19 @@ export function createIntro(initialMode: InputMode): IntroCard {
   let mode = initialMode;
   let open = !introSeen();
   root.hidden = !open;
+  const renderNote = () => {
+    const text = introNote(mode);
+    note.textContent = text ?? "";
+    note.hidden = text === null;
+  };
   renderHowTo(list, howToRows(mode));
+  renderNote();
 
   const setMode = (next: InputMode) => {
     if (next === mode) return;
     mode = next;
     renderHowTo(list, howToRows(mode));
+    renderNote();
   };
 
   const close = () => {
