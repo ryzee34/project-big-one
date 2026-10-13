@@ -408,7 +408,7 @@ uppercase, 3 px edge, 3 px hard shadow).
 - Tension meter: canvas, horizontal, top centre, 40 % of the grid wide and 3 cells tall, the
   three zones from section 6.
 - Title on first load: THE BIG ONE in Silkscreen at 24 px (three screen pixels per cell), the
-  hint under it, and one line in Archivo 14 px: "There's a big one out past the point. Nobody
+  hint under it, and one line in Archivo 14 px: "The big one is out there… somewhere. No one
   has landed it." It fades on the first cast and never returns.
 - Menu overlay: Resume, Help, Log, Theme, Sound, Reset log.
 

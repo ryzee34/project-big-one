@@ -17,7 +17,7 @@ export type Ui = { update(snap: Snapshot): void };
 
 type Deps = { dispatch: (e: GameEvent) => void; unlockAudio: () => void; getSave?: () => SaveData };
 
-const TITLE_LINE = "There's a big one out past the point. Nobody has landed it.";
+const TITLE_LINE = "The big one is out there… somewhere. No one has landed it.";
 const TOAST_FADE_MS = 180;
 const GROUND: Record<Theme, string> = { light: "#d6e2e4", dark: "#0a1119" };
 
