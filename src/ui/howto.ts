@@ -26,7 +26,7 @@ export function howToRows(mode: InputMode): HowToRow[] {
 }
 
 export function introNote(mode: InputMode): string | null {
-  return mode === "fine" ? "For the best experience, play it on a mobile device." : null;
+  return mode === "fine" ? "For the best experience, play it on a mobile device (in my opinion)." : null;
 }
 
 export function renderHowTo(list: HTMLElement, rows: HowToRow[]) {
