@@ -11,7 +11,7 @@ const ANGLER_BITMAP: Bitmap = [
   ".........nnnnnnnnnnnn...",
   ".........NNNNNNNNNNNN...",
   ".........NNNNNNNNNNNN...",
-  ".........NNNNNNNNNNNN...",
+  "..........NNNNNNNNNN....",
   "...........ssssssss.....",
   "............ssssss......",
   "............ssssss......",
