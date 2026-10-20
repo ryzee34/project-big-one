@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
 
 export default defineConfig(({ mode }) => ({
-  base: mode === "pages" ? "/the-big-one/" : "/",
+  base: mode === "pages" ? "/project-big-one/" : "/",
 }));

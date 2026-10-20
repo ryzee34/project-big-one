@@ -1,6 +1,6 @@
 # The Big One
 
-Play it: https://ryzee34.github.io/the-big-one/
+Play it: https://ryzee34.github.io/project-big-one/
 
 A fishing game for the browser, seen over the angler's shoulder. He stands at the end of the pier
 from ryanhklee.com, rod in hand, and casts out over the water. Perch and bass bite close in, tuna
